@@ -3,8 +3,10 @@
 
 Unified HMI consists of two main components.
 
-* Remote Virtio GPU Device(RVGPU): Render applications remotely in different SoCs/VMs.
-* Distributed Display Framework(DDFW): Flexible layout control of applications across multiple displays.
+* Remote Virtio GPU Device(RVGPU): Render applications remotely in different SoCs/VMs, even when different OSes are running.
+* Distributed Display Framework(DDFW): Flexible layout control of applications across multiple displays and lifecycle management of applications.
+
+The meta-uhmi provides Unified HMI v3.0.
 
 The meta-uhmi currently supports x86, Raspberry Pi4, and Renesas Boards platforms.
 There are two layers under meta-uhmi to support these two frameworks.
@@ -17,17 +19,22 @@ RVGPU currently supports the following images: `agl-image-weston`, `agl-ivi-demo
 RVGPU is open-source software (OSS). For more details, visit the [Unified HMI - Remote Virtio GPU](https://github.com/unified-hmi/remote-virtio-gpu).
 
 ## Distributed Display Framework(DDFW)
-DDFW is an open-source software layer that provides essential services for managing distributed display applications. This framework is designed to work with a variety of hardware and software configurations, making it a versatile choice for developers looking to create scalable and robust display solutions.
+DDFW is an open-source software layer that provides essential services for managing distributed display applications. It maps the physical displays of the cockpit into a single large virtual screen, controls application layouts (location, size, and display order) on that virtual screen, and manages the lifecycle of applications and RVGPU modules.
 
-DDFW consists of two main components:
+Since Unified HMI v3.0, the former Unified Clustering Tools (UCL) and Unified Layout Tools (ULA) are merged into one framework and released as the [unified-hmi](https://github.com/unified-hmi/unified-hmi) repository. The main features of v3.0 are:
 
-* [ucl-tools](https://github.com/unified-hmi/ucl-tools): Unified Clustering Tools (UCL), launch applications for multiple platforms and manage execution order and survival.
+* Simplified APIs: launching an application and laying it out on any display takes a single API call, without preparing JSON files at runtime.
+* Dynamic layout control at runtime, such as moving windows with smooth animation, mirroring applications, and priority groups.
 
-* [ula-tools](https://github.com/unified-hmi/ula-tools): Unified Layout Tools (ULA), application layout for virtual displays on virtual screen (mapped from physical displays).
+unified-hmi consists of the following commands:
 
-The API functionality of both UCL and ULA are both exposed with gRPC. Once the gRPC Servers (`ucl-lifecycle-manager` for UCL and `ula-client-manager` for ULA) are running, you can launch gRPC Client API from any application or command line and easily use their functions.
+* `uhmi-master-node`: Central gRPC server that hosts the Unified HMI API (`UHMIService`). It runs only on the manager node.
+* `uhmi-worker-node`: Per-node agent that runs on all nodes. It launches applications and RVGPU modules (`rvgpu-proxy`, `rvgpu-wlproxy`, and `rvgpu-renderer`), and applies layouts.
+* `uhmi-comm`: Sample command line client that sends gRPC commands to `uhmi-master-node`.
 
-For more details about these frameworks, please visit our GitHub repository.
+The Unified HMI API is exposed with gRPC (defined in [proto/uhmi.proto](https://github.com/unified-hmi/unified-hmi/blob/main/proto/uhmi.proto)). Once `uhmi-master-node` is running, you can call the API from any application or from the command line with `uhmi-comm`. Reference implementations of gRPC clients for Go and Dart are also available in the repository.
+
+For more details about the framework, please visit our GitHub repository.
 
 ## How to build
 Follow the [AGL documentation](https://docs.automotivelinux.org/en/master/#01_Getting_Started/02_Building_AGL_Image/01_Build_Process_Overview/) for the build process, and set up the "[Initializing Your Build Environment](https://docs.automotivelinux.org/en/master/#01_Getting_Started/02_Building_AGL_Image/04_Initializing_Your_Build_Environment/)" section as described below to enable the AGL feature 'agl-uhmi'. 
@@ -42,7 +49,9 @@ To add RVGPU and DDFW to the build images, please add the packagegroup that enab
 ```
 $ echo 'IMAGE_INSTALL:append = " packagegroup-rvgpu packagegroup-ddfw"' >> conf/local.conf
 ```
-**Note**: RVGPU and DDFW can each be used independently. If you wish to use them individually, please add only one of the packagegroups to the installation target.
+packagegroup-ddfw installs `unified-hmi` (`uhmi-master-node`, `uhmi-worker-node`, `uhmi-comm`), its systemd services, and the default configuration files under `/etc/uhmi-framework/`.
+
+**Note**: RVGPU can be used independently without DDFW. However, DDFW uses RVGPU to render applications, so if you use DDFW, please add both packagegroups to the installation target.
 
 After adding the feature, execute the command:
 ```
@@ -105,74 +114,47 @@ When QEMU boot, you can log in to qemu on the terminal where you executed above 
 
 For example:
 ```
-ifconfig <your environment> 192.168.0.100 netmask 255.255.255.0
+ifconfig <your environment> 192.168.0.121 netmask 255.255.255.0
 ```
 
 ## How to run RVGPU remotely
-Prepare two images, one as the Sender and the other as the Receiver.
-It is necessary for the Sender and Receiver to be within the same network.
+RVGPU uses `rvgpu-renderer` as the server on the Receiver and `rvgpu-proxy` as the client on the Sender. The two images must be able to communicate over the network. The following example uses a 1280x720 display and port 55667.
 
-**Receiver side**  
+**Receiver side** (run in the active Wayland session):
 ```
 $ export XDG_RUNTIME_DIR=/run/user/<your_UID>
-$ rvgpu-renderer -b <your_Area>@0,0 -p <Port_Number> &
+$ rvgpu-renderer -b 1280x720@0,0 -p 55667
 ```
 
-Replace the placeholders with the appropriate values:
-- `<your_UID>`: Specify according to your environment, for example: 200
-- `<your_Area>`: Enter an usable area for example: 1920x1080  
-- `<Port_Number>`: Enter an available port number, for example: 55555
-
-**Sender side**  
-Create the following shell script **run_remote_app.sh** in any `<WORKDIR>` for a smooth experience.
+Keep `rvgpu-renderer` running. On the Sender, load the required kernel modules and start the proxy as root:
 ```
-#!/bin/bash
-
-export XDG_RUNTIME_DIR=/tmp
-export LD_LIBRARY_PATH=/usr/lib/mesa-virtio
-
-# -------------
-# launch app
-# -------------
-$@
+$ sudo modprobe virtio-gpu
+$ sudo modprobe virtio-lo
+$ sudo rvgpu-proxy -s 1280x720@0,0 -n <Receiver_IP_address>:55667 &
 ```
 
-Save the file and run the following to start weston.
+Replace `<your_UID>` with the UID of the user running the Wayland compositor and `<Receiver_IP_address>` with the Receiver's IP address. If the kernel modules are already loaded, the `modprobe` commands can be skipped.
 
+In the same Sender session, start `rvgpu-wlproxy` on the GPU device created by `rvgpu-proxy`:
 ```
-$ rvgpu-proxy -s <your_Area>@0,0 -n <IP_address_of_Receiver>:<Port_Number> &
-$ EGLWINSYS_DRM_DEV_NAME=<RVGPU_DRM_DEVICE_PATH> <WORKDIR>/run_remote_app.sh rvgpu-wlproxy -s <your_Area> -S <your_WAYLAND_DISPLAY> &
-```  
-Replace the placeholders with the appropriate values:
-- `<Port_Number>`: Port set in the renderer.
-- `<your_WAYLAND_DISPLAY>`: Specify your WAYLAND_DISPLAY socket name, for example: wayland-uhmi-0
-- `<RVGPU_DRM_DEVICE_PATH>`: Specify rvgpu drm device path generated by rvgpu-proxy, for example: /dev/dri/rvgpu_virtio0
-
-After completing these steps, the Weston screen from the Sender will be transferred and displayed on the Receiver using rvgpu-proxy and rvgpu-renderer. You can verify that everything is functioning properly by launching wayland applications on the Sender side, such as:
-```
-$ WAYLAND_DISPLAY=<your_WAYLAND_DISPLAY> <WORKDIR>/run_remote_app.sh weston-simple-egl -f
-``` 
-
-You can also verify the touch or keyboard operation support of the RVGPU by using app such as 
-```
-$ WAYLAND_DISPLAY=<your_WAYLAND_DISPLAY> <WORKDIR>/run_remote_app.sh weston-smoke
-$ WAYLAND_DISPLAY=<your_WAYLAND_DISPLAY> <WORKDIR>/run_remote_app.sh weston-editor
+$ export XDG_RUNTIME_DIR=/tmp
+$ export LD_LIBRARY_PATH=/usr/lib/mesa-virtio
+$ export EGLWINSYS_DRM_DEV_NAME=/dev/dri/rvgpu_virtio0
+$ rvgpu-wlproxy -s 1280x720 -S wayland-rvgpu-0 &
 ```
 
-**Appendix**  
-- By building the RVGPU on Ubuntu, it is possible to enable bidirectional remote rendering between the agl-ivi-demo-flutter and Ubuntu.
-For the build procedure on Ubuntu, see the following URL: https://github.com/unified-hmi/remote-virtio-gpu .
+`EGLWINSYS_DRM_DEV_NAME` must point to the RVGPU DRM device created on the Sender. Adjust the device path if its generated name differs. Once `rvgpu-wlproxy` is running, launch `glmark2-es2-wayland` using its Wayland socket:
+```
+$ WAYLAND_DISPLAY=wayland-rvgpu-0 glmark2-es2-wayland -s 1280x720
+```
+
+The rendered output should appear in the `rvgpu-renderer` window on the Receiver. Keep the renderer, proxy, and wlproxy processes running while using the application. Ensure that the Sender can reach the Receiver on the selected port.
 
 ## How to set up Distributed Display Framework (DDFW)
 
 To utilize DDFW, you need to set up each image with a distinct hostname and static IP address. Please note that the following configurations are examples and should be adapted to fit your specific network environment.
 
-### Configurations to run RVGPU from UCL.
-
-By setting XDG_RUNTIME_DIR=/run/user/<your_UID> and WAYLAND_DISPLAY=<your_WAYLAND_DISPLAY> correctly in /lib/systemd/system/ucl-node.service, you can display the applications launched by Unified HMI on the Wayland compositor (e.g., agl-compositor, Weston, etc...).
-
-Please execute `$ls /run/user/` in your environment to check <your_UID>.
-Additionally, when the Wayland compositor is launched, <your_WAYLAND_DISPLAY> will be generated under /run/user/<your_UID>, so please check that as well.
+In the following examples, we assume two images, `host0` and `host1`. `host0` is the manager node that runs `uhmi-master-node`, and both images run `uhmi-worker-node`.
 
 ### Set Unique Hostnames
 
@@ -180,233 +162,216 @@ Edit the `/etc/hostname` file on each image to set a unique hostname. Here are t
 
 - **For the first image:**
 ```
-echo "agl-host0" | tee /etc/hostname
+echo "host0" | tee /etc/hostname
 ```
 - **For the second image:**
 ```
-echo "agl-host1" | tee /etc/hostname
+echo "host1" | tee /etc/hostname
 ```
+
+**Note**: Unified HMI identifies each node by its hostname, so the hostnames must match the `hostname` fields defined in virtual-screen-def.json.
 
 ### Assign Static IP Addresses
 
-Configure a static IP address for each image by editing the `/etc/systemd/network/wired.network` file. If this file does not exist, please create a new one. Use the following template and replace `<IP_address>` and `<Netmask>` with your network's specific settings:
+Configure a static IP address for each image with ConnMan. On each image, list the available services and identify the wired Ethernet service ID (usually shown as `ethernet_..._cable`):
 
 ```
-[Match]
-KernelCommandLine=!root=/dev/nfs
-Name=eth* en*
-
-[Network]
-Address=<IP_address>/<Netmask>
+$ connmanctl services
 ```
 
-Here is how you might configure the static IP addresses for the first two images:
+Run the following command as root, replacing `<wired_service_id>` with the service ID shown by `connmanctl services`. ConnMan requires an address, netmask, and gateway for manual IPv4 configuration:
+
+```
+$ connmanctl config <wired_service_id> ipv4 manual <IP_address> <Netmask> <Gateway>
+```
+
+For example, assuming the network gateway is `192.168.0.1`, configure the first two images as follows:
 
 - **For the first image:**
 ```
-[Match]
-KernelCommandLine=!root=/dev/nfs
-Name=eth* en*
-
-[Network]
-Address=192.168.0.100/24
+$ connmanctl config <host0_wired_service_id> ipv4 manual 192.168.0.121 255.255.255.0 192.168.0.1
 ```
 - **For the second image:**
 ```
-[Match]
-KernelCommandLine=!root=/dev/nfs
-Name=eth* en*
-
-[Network]
-Address=192.168.0.101/24
+$ connmanctl config <host1_wired_service_id> ipv4 manual 192.168.0.122 255.255.255.0 192.168.0.1
 ```
 
-Once the hostname and IP addresses settings are complete, please reboot to reflect these settings.
+Replace the example gateway with the gateway used by your network. ConnMan applies the settings immediately; verify the assigned addresses with `ip addr`.
 
 ### Customizing Virtual Screen Definitions
 
-Adjust the `/etc/uhmi-framework/virtual-screen-def.json` file to match your environment. In the folowing example, we assume an environment where two images, agl-host0 and agl-host1, each have a display output with a resolusion of 1920x1080(FullHD), arranged in order from left to right as agl-host0 and then agl-host1:
+Adjust the `/etc/uhmi-framework/virtual-screen-def.json` file to match your environment. This file is required on all images, and its contents must be the same on all images. In the following example, we assume an environment where two images, host0 and host1, each have a display output with a resolution of 1920x1080(FullHD), arranged in order from left to right as host0 and then host1:
 
 ```
 {
     "virtual_screen_2d": {
         "size": {"virtual_w": 3840, "virtual_h": 1080},
         "virtual_displays": [
-            {"vdisplay_id": 0, "disp_name": "AGL_SCREEN0", "virtual_x": 0, "virtual_y": 0, "virtual_w": 1920, "virtual_h": 1080},
-            {"vdisplay_id": 1, "disp_name": "AGL_SCREEN1", "virtual_x": 1920, "virtual_y": 0, "virtual_w": 1920, "virtual_h": 1080}
+            {"vdisplay_id": 0, "disp_name": "screen0", "virtual_x": 0, "virtual_y": 0, "virtual_w": 1920, "virtual_h": 1080},
+            {"vdisplay_id": 1, "disp_name": "screen1", "virtual_x": 1920, "virtual_y": 0, "virtual_w": 1920, "virtual_h": 1080}
+        ],
+        "virtual_display_areas": [
+            {"area_name": "screen0_TR", "virtual_x": 960, "virtual_y": 0, "virtual_w": 960, "virtual_h": 540},
+            {"area_name": "screen1_BR", "virtual_x": 2880, "virtual_y": 540, "virtual_w": 960, "virtual_h": 540}
         ]
     },
-    "virtual_screen_3d": {},
     "real_displays": [
         {"node_id": 0, "vdisplay_id": 0, "pixel_w": 1920, "pixel_h": 1080, "rdisplay_id": 0},
         {"node_id": 1, "vdisplay_id": 1, "pixel_w": 1920, "pixel_h": 1080, "rdisplay_id": 0}
     ],
     "node": [
-        {"node_id": 0, "hostname": "agl-host0", "ip": "192.168.0.100"},
-        {"node_id": 1, "hostname": "agl-host1", "ip": "192.168.0.101"}
+        {"node_id": 0, "hostname": "host0", "ip": "192.168.0.121", "platform": "linux"},
+        {"node_id": 1, "hostname": "host1", "ip": "192.168.0.122", "platform": "linux"}
     ],
     "distributed_window_system": {
-        "ucl_lifecycle_manager" : {"node_id" : 0, "port": 6543},
-        "ula_client_manager" : {"node_id" : 0, "port": 6443},
+        "uhmi_master_node": {"node_id": 0, "port": 6643},
         "framework_node": [
-            {"node_id": 0,"ula": {"debug": false, "debug_port": 8080, "port": 10100},"ucl_node": {"port": 7654},
-             "compositor": [{"vdisplay_ids": [0], "sock_domain_name": "rvgpu-compositor-0", "listen_port": 36000}]
-            },
-            {"node_id": 1,"ula": {"debug": false, "debug_port": 8080, "port": 10100},"ucl_node": {"port": 7654},
-             "compositor": [{"vdisplay_ids": [1], "sock_domain_name": "rvgpu-compositor-1", "listen_port": 36001}]
-            }
+            {"node_id": 0, "env": ["WAYLAND_DISPLAY=wayland-0", "XDG_RUNTIME_DIR=/run/user/1001"]},
+            {"node_id": 1, "env": ["WAYLAND_DISPLAY=wayland-0", "XDG_RUNTIME_DIR=/run/user/1001"]}
         ]
     }
 }
 ```
 
-Be sure to update the virtual_w, virtual_h, virtual_x, virtual_y, pixel_w, pixel_h, hostname, and ip fields to accurately reflect your specific network configuration.
+In this configuration:
+
+- **virtual_displays** defines the virtual displays on the virtual screen. The `disp_name` of each virtual display can be used as a destination to place applications.
+- **virtual_display_areas** defines optional named areas on the virtual screen. The `area_name` of each area can also be used as a destination. In addition, built-in sub-areas such as `<disp_name>_LEFT`, `<disp_name>_RIGHT`, `<disp_name>_TOP`, `<disp_name>_BOTTOM`, `<disp_name>_TL`, `<disp_name>_TR`, `<disp_name>_BL`, and `<disp_name>_BR` are available for each virtual display without defining them.
+- **real_displays** maps the physical display of each node to a virtual display.
+- **node** defines the hostname and IP address of each node.
+- **uhmi_master_node** specifies the node that runs `uhmi-master-node` and the port of its gRPC server.
+- **framework_node** specifies the environment variables passed to applications and RVGPU modules launched on each node.
+
+By setting `XDG_RUNTIME_DIR=/run/user/<your_UID>` and `WAYLAND_DISPLAY=<your_WAYLAND_DISPLAY>` correctly in the `env` of `framework_node`, you can display the applications launched by Unified HMI on the Wayland compositor (e.g., agl-compositor, Weston, etc...).
+Please execute `$ls /run/user/` in your environment to check <your_UID>.
+Additionally, when the Wayland compositor is launched, <your_WAYLAND_DISPLAY> will be generated under /run/user/<your_UID>, so please check that as well.
+
+Be sure to update the virtual_w, virtual_h, virtual_x, virtual_y, pixel_w, pixel_h, hostname, ip, and env fields to accurately reflect your specific environment.
+
+### Customizing Application Definitions
+
+Adjust the `/etc/uhmi-framework/app-list-def.json` file to define the applications launched by Unified HMI. This file is required only on the manager node that runs `uhmi-master-node`. Here is an example of `app-list-def.json`:
+
+```
+{
+    "apps": [
+        {
+            "app_name": "glmark2",
+            "sender": "host0",
+            "app_command": "/usr/bin/glmark2-es2-wayland -s 1920x1080",
+            "app_size": {"w": 1920, "h": 1080},
+            "command_env": "LD_LIBRARY_PATH=/usr/lib/mesa-virtio",
+            "primary": true
+        }
+    ]
+}
+```
+
+In this configuration:
+
+- **app_name**: The name used to specify the application in the Unified HMI API.
+- **sender**: The hostname of the node where the application runs.
+- **app_command**: The command line to launch the application.
+- **app_size**: The size of the application window.
+- **command_env**: Additional environment variables for the application. To render the application with RVGPU, specify `LD_LIBRARY_PATH=/usr/lib/mesa-virtio`.
+- **primary**: If `true`, the application belongs to the `Primary` priority group. Otherwise, it belongs to the `General` priority group. Applications in the `Primary` group are always displayed in front of applications in the `General` group.
 
 ### Restarting Services
-Once you have prepared the virtual-screen-def.json file and configured the system, you need to restart the system or the following services for the changes to take effect:
+
+The systemd services `uhmi-master-node` and `uhmi-worker-node` are enabled by default. Once you have prepared the virtual-screen-def.json and app-list-def.json files and configured the system, you need to restart the system or the following services for the changes to take effect.
+
+Please execute the following command on all nodes.
 ```
-systemctl restart ula-node
-systemctl restart ucl-node
+systemctl restart uhmi-worker-node
 ```
 
-Please execute the following command only on the nodes specified as ucl_lifecycle_manager and ula_client_manager in the virtual-screen-def.json file.
+Please execute the following command only on the node specified as uhmi_master_node in the virtual-screen-def.json file.
 ```
-systemctl restart ucl-lifecycle-manager
-systemctl restart ula-client-manager
+systemctl restart uhmi-master-node
 ```
 
 After restarting these services, your system should be ready to use the DDFW with the new configuration.
 
-## How to use UCL (Unified Clustering) Framework
+## How to use Unified HMI API
 
-The Unified Clustering (UCL) Framework provides a distributed launch feature for applications using remote virtio GPU (rvgpu). By preparing a JSON configuration, you can enable the launch of applications across multiple devices in a distributed environment.
+`uhmi-comm` is a sample command line client of the Unified HMI API. It reads `/etc/uhmi-framework/virtual-screen-def.json` to find `uhmi-master-node`, so you can run it on any node defined in the file. Commands are selected with the `-c` option.
 
-### Launching rvgpu-renderer on receiver nodes using UCL Client API
+**Note**: Every command of `uhmi-comm` calls the Unified HMI gRPC API, so your applications can also call the same API directly. For more details, please refer to the [unified-hmi](https://github.com/unified-hmi/unified-hmi) repository.
 
-If you define the `compositor` in the `framework_node` section of virtual-screen-def.json, you can launch rvgpu-renderer on the all receiver nodes using the following command:
-```
-ucl-api-comm -c launch_compositor_async
-```
+### Launching an Application
 
-### Setting Up for Application Launch using UCL
-
-To facilitate the distributed launch of an application with UCL, you need to create a JSON configuration file that specifies the details of the application and how it should be executed on the sender and receiver nodes. 
-
-Here's an example of such a JSON configuration named `app.json`:
-```
-{
-  "format_v1": {
-    "command_type": "remote_virtio_gpu",
-    "appli_name": "glmark2-es2-wayland",
-    "sender": {
-      "launcher": "agl-host0",
-      "command": "ucl-virtio-gpu-wl-send",
-      "frontend_params": {
-        "scanout_x": 0,
-        "scanout_y": 0,
-        "scanout_w": 1920,
-        "scanout_h": 1080
-      },
-      "appli": "/usr/bin/glmark2-es2-wayland --fullscreen"
-    },
-    "receivers": [
-      {
-        "launcher": "agl-host0",
-        "backend_params": {
-          "listen_port": 36000
-        }
-      },
-      {
-        "launcher": "agl-host1",
-        "backend_params": {
-          "listen_port": 36001
-        }
-      }
-    ]
-  }
-}
-```
-
-In this example, the application glmark2-es2-wayland is configured to launch on the sender node `agl-host0` and render it on the receiver nodes `agl-host0` and `agl-host1`. The `scanout_x`, `scanout_y`, `scanout_w`, `scanout_h` parameters define the size of the window.
-
-### Launching the Application using UCL Client API
-
-Once the JSON configuration file is ready, you can execute the application across the distributed system by piping the JSON content to the UCL Client API:
-```
-ucl-api-comm -c run_command <path to app.json>
-```
-
-This command will read the configuration and initiate the application launch process, distributing the workload as defined in the JSON file.
-
-Please ensure that the JSON configuration file you create (`app.json` in the example) is correctly formatted and contains the appropriate parameters for your specific use case.
-
-**Note**: To check other options for ucl-api-comm, please use the -h option.
-
-## How to use ULA (Unified Layout) Framework
-
-The Unified Layout (ULA) Framework allows for the definition of physical displays on a virtual screen and provides the ability to apply layout settings such as position and size to applications launched using the UCL Framework.
-
-### Creating a Layout Configuration File
-
-To define the layout for your applications, you need to create a JSON file, such as `initial-vscreen.json`, with the necessary configuration details. This file will contain the layout settings that specify how applications should be positioned and sized within the virtual screen. Here is an example of what the contents of `initial-vscreen.json` file might look like:
+You can launch an application defined in app-list-def.json and place it on any destination with a single command. `uhmi-master-node` launches the application and RVGPU modules on the sender and receiver nodes, and applies the layout automatically.
 
 ```
-{
-  "command": "initial-vscreen",
-  "vlayer": [
-    {
-      "appli_name": "glmark2-es2-wayland",
-      "VID": 910000,
-      "coord": "global",
-      "virtual_w": 1920,
-      "virtual_h": 1080,
-      "vsrc_x": 0,
-      "vsrc_y": 0,
-      "vsrc_w": 1920,
-      "vsrc_h": 1080,
-      "vdst_x": 960,
-      "vdst_y": 0,
-      "vdst_w": 1920,
-      "vdst_h": 1080,
-      "z_order": 1,
-      "vsurface": [
-        {
-          "VID": 5100,
-          "pixel_w": 1920,
-          "pixel_h": 1080,
-          "psrc_x": 0,
-          "psrc_y": 0,
-          "psrc_w": 1920,
-          "psrc_h": 1080,
-          "vdst_x": 0,
-          "vdst_y": 0,
-          "vdst_w": 1920,
-          "vdst_h": 1080
-        }
-      ]
-    }
-  ]
-}
+uhmi-comm -c ListAvailableApps
+uhmi-comm -c ListDestinations
+uhmi-comm -c LaunchApp <appName> <destName> [async]
 ```
 
-In this example, the application is renderd across the right half of the agl-host0 and the left half of agl-host1 display.
+- `<appName>`: The `app_name` defined in app-list-def.json, for example: glmark2
+- `<destName>`: A destination listed by `ListDestinations`, such as a virtual display (`screen0`), a virtual display area (`screen1_BR`), or a built-in sub-area (`screen0_LEFT`).
+- `async` (optional): Return immediately instead of blocking until the application exits.
 
-In this configuration:
-
-- **vlayer** defines a virtual layer that represents a group of surfaces within the virtual screen. Each layer has a unique Virtual ID (VID) and can contain multiple surfaces. The layer's source (`vsrc_x`, `vsrc_y`, `vsrc_w`, `vsrc_h`) and destination (`vdst_x`, `vdst_y`, `vdst_w`, `vdst_h`) coordinates determine where and how large the layer appears on the virtual screen.
-
-- **vsurface**  defines individual surfaces within the virtual layer. Each surface also has a VID, and its pixel dimensions (`pixel_w`, `pixel_h`) represent the actual size of the content. The source (`psrc_x`, `psrc_y`, `psrc_w`, `psrc_h`) and destination (`vdst_x`, `vdst_y`, `vdst_w`, `vdst_h`) coordinates determine the portion of the content to display and its location within the layer.
-
-**Note**: If you want to change layouts of the application launched by UCL, please define the same `appli_name` as in app.json.
-
-### Applying the Layout Configuration
-
-Once you have created the `initial-vscreen.json` file with your layout configuration, you can apply it to your system using the following command:
-
+For example, the following command launches glmark2 on host0 and displays it on the display of host0:
 ```
-ula-grpc-client -c DwmSetLayoutCommand <path to initial-vscreen.json>
+uhmi-comm -c LaunchApp glmark2 screen0 async
 ```
 
-Executing this command will process the configuration from the JSON file and apply the layout settings to the virtual screen. As a result, the applications will appear in the specified positions and sizes according to the layout defined in the file.
+You can check and stop the running applications with the following commands.
+```
+uhmi-comm -c ListRunningApps
+uhmi-comm -c StopApp <appName>
+uhmi-comm -c StopAll
+```
 
-Ensure that `initial-vscreen.json` file you create accurately reflects the desired layout for your applications and display setup.
+### Controlling Layouts at Runtime
+
+You can change the layout of the running applications at runtime with the following commands.
+
+**Move an application window**
+
+```
+uhmi-comm -c MoveWindow <appName> <destName> [durationMs]
+```
+
+The window moves to the destination with smooth animation. `durationMs` (optional) is the animation duration in milliseconds (default: 1000). For example, the following command moves glmark2 from the display of host0 to the bottom-right area of the display of host1 in 500 ms:
+```
+uhmi-comm -c MoveWindow glmark2 screen1_BR 500
+```
+
+**Widen an application window across two displays**
+
+```
+uhmi-comm -c WidenApp <appName> <dispName1> <dispName2>
+```
+
+For example, the following command renders glmark2 across the displays of host0 and host1:
+```
+uhmi-comm -c WidenApp glmark2 screen0 screen1
+```
+
+**Mirror an application**
+
+```
+uhmi-comm -c CreateAppMirror <appName> <destName>
+uhmi-comm -c RemoveAppMirror <mirrorName>
+```
+
+`CreateAppMirror` displays a mirror of the application on the destination and prints the name of the mirror (e.g., `glmark2_mirror0`). Use the name to remove the mirror with `RemoveAppMirror`.
+
+**Show or hide an application**
+
+```
+uhmi-comm -c ActivateWindow <appName>
+uhmi-comm -c DeactivateWindow <appName>
+```
+
+**Set priority groups**
+
+Priority groups prevent other applications from being displayed in front of specific applications. Applications in a higher priority group are always displayed in front of applications in a lower priority group.
+```
+uhmi-comm -c ListPriorityGroups
+uhmi-comm -c SetAppPriorityGroup <appName> <group>
+```
+
+**Note**: To check other commands and options for uhmi-comm, please use the -h option.

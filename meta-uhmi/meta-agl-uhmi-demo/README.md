@@ -12,14 +12,14 @@ Please prepare two boards, one as the sender and the other as the receiver, usin
 
 * sender
 ```
-IP: 192.168.0.100
-HOSTNAME: agl-host0
+IP: 192.168.0.121
+HOSTNAME: host0
 ```
 
 * receiver
 ```
-IP: 192.168.0.101
-HOSTNAME: agl-host1
+IP: 192.168.0.122
+HOSTNAME: host1
 ```
 
 ## How to build
@@ -46,24 +46,26 @@ $ bitbake agl-uhmi-demo-preconfigured-weston
 ## How to use
 After both the sender and receiver have successfully booted, set the correct IP addresses for both. Then, execute the following commands on the sender to confirm that the application is displayed across two displays, each connected to different boards.
 
-### How to launch application
-Execute UCL API to launch the rvgpu compositor and an application (e.g., glmark2).
+### How to launch an application
+Unified HMI v3 runs `uhmi-master-node` on the sender (`host0`) and
+`uhmi-worker-node` on both images. The default application definition includes
+glmark2. Use `uhmi-comm` to list applications and destinations, then launch it:
 
 ```
-$ ucl-api-comm -c launch_compositor_async
-$ ucl-api-comm -c run_async glmark2
+$ uhmi-comm -c ListAvailableApps
+$ uhmi-comm -c ListDestinations
+$ uhmi-comm -c LaunchApp glmark2 screen0 async
 ```
 
 ### How to control layouts
-After launching applications, execute ULA API to control application layouts across two displays.
-In the preconfigured image, three JSON samples are provided in /var/local/uhmi-app/glmark2/:
-* initial-vscreen-wide.json: display app across two displays
-* initial-vscreen-agl.json: display app on the AGL display
-* initial-vscreen-weston.json: display app on the weston display
+After launching the application, use the Unified HMI API to move it between
+displays, widen it across displays, or stop it:
 
-You can change application layouts by executing the following commands:
 ```
-$ ula-grpc-client -c DwmSetLayoutCommand /var/local/uhmi-app/glmark2/initial-vscreen-wide.json
-$ ula-grpc-client -c DwmSetLayoutCommand /var/local/uhmi-app/glmark2/initial-vscreen-agl.json
-$ ula-grpc-client -c DwmSetLayoutCommand /var/local/uhmi-app/glmark2/initial-vscreen-weston.json
+$ uhmi-comm -c MoveWindow glmark2 screen1_BR 500
+$ uhmi-comm -c WidenApp glmark2 screen0 screen1
+$ uhmi-comm -c StopApp glmark2
 ```
+
+See the [meta-uhmi README](../README.md) for virtual-screen and application
+configuration details and additional API commands.
