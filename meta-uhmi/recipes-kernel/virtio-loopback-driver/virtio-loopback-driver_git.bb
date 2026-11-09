@@ -10,8 +10,8 @@ inherit module
 EXTRA_OEMAKE = "M=${S} -C ${STAGING_KERNEL_DIR}"
 
 do_install:append() {
-    install -d ${D}${PKG_CONFIG_SYSTEM_INCLUDE_PATH}/linux
-    install -m 755 ${S}/virtio_lo.h ${D}${PKG_CONFIG_SYSTEM_INCLUDE_PATH}/linux/
+    install -d ${D}${includedir}/linux
+    install -m 644 ${S}/virtio_lo.h ${D}${includedir}/linux/
     # Add this section to install virtio_lo.conf
     install -d ${D}${sysconfdir}/modules-load.d
     echo "virtio_lo" > ${D}${sysconfdir}/modules-load.d/virtio_lo.conf

@@ -1,5 +1,5 @@
-PV = "0.0+git${SRCPV}"
-SRCREV = "8f18b991e2d560b09f69cbcc90ef11be85865349"
+PV = "2.1.0+git${SRCPV}"
+SRCREV = "9dc4dc93634c6340bf500c2141d8273ae40a99a8"
 BRANCH ?= "main"
 SRC_URI = " \
     git://github.com/unified-hmi/remote-virtio-gpu.git;protocol=https;branch=${BRANCH} \
