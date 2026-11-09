@@ -9,8 +9,7 @@ IMAGE_FEATURES += "ssh-server-openssh"
 IMAGE_INSTALL += " \
     packagegroup-rvgpu \
     packagegroup-ddfw \
-    uhmi-config-weston \
 "
 
-UHMI_HOSTNAME ?= "agl-host1"
+UHMI_HOSTNAME ?= "host1"
 require recipes-config/uhmi-config/set-hostname.inc

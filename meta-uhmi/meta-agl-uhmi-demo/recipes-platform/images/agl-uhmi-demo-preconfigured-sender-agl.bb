@@ -12,12 +12,11 @@ IMAGE_FEATURES += "ssh-server-openssh package-management"
 IMAGE_INSTALL += " \
     packagegroup-rvgpu \
     packagegroup-ddfw-agl \
-    uhmi-config-agl \
     agl-compositor \
     native-shell-client \
     glmark2 \
     uhmi-udev-conf \
 "
 
-UHMI_HOSTNAME ?= "agl-host0"
+UHMI_HOSTNAME ?= "host0"
 require recipes-config/uhmi-config/set-hostname.inc

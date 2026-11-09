@@ -4,7 +4,7 @@ LICENSE = "Apache-2.0"
 inherit packagegroup
 
 RDEPENDS:${PN} += " \
-    ucl-tools \
+    unified-hmi \
     ula-tools-agl \
     uhmi-agl-wm \
     agl-compositor \
