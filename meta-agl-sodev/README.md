@@ -1,10 +1,10 @@
-# AGL Xen support base layer
+# AGL SoDeV support base layer
 
-This OpenEmbedded layer adds the feature 'agl-xen'
+This OpenEmbedded layer adds the feature 'agl-sodev'
 
-'agl-xen' is used to provide base Xen image building support via:
+'agl-sodev' is used to provide base Xen image building support via:
 - Linux kernel configuration fragments to support Xen dom0 vs domd/domu.
-  Also disables meta-virtualization's Xen kernel configuration, but
+  It also disables meta-virtualization's Xen kernel configuration, but
   leaves that layer's other kernel configuration support alone in case
   a downstream user wants e.g. Kubernetes support.
 - agl-xen-image bbclass for multi-partition disk images to support
@@ -28,5 +28,5 @@ are potentially reusable for simple downstream build configurations.
 
 ## Setup
 
-Enable the `agl-xen` AGL feature when setting up your build environment
+Enable the `agl-sodev` AGL feature when setting up your build environment
 with aglsetup.sh.

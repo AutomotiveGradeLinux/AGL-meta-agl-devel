@@ -7,5 +7,5 @@ AGL_META_PYTHON = "${METADIR}/external/meta-openembedded/meta-python"
 AGL_META_VIRTUALIZATION = "${METADIR}/external/meta-virtualization"
 
 BBLAYERS =+ " \
-	${METADIR}/meta-agl-devel/meta-agl-xen \
+	${METADIR}/meta-agl-devel/meta-agl-sodev \
 	"

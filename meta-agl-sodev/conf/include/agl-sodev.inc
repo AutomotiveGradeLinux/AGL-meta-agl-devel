@@ -11,12 +11,14 @@ DISTRO_FEATURES:append = " virtualization xen"
 AGL_GUEST_MACHINE = "virtio-aarch64"
 
 # Hook to allow overriding AGL_GUEST_MACHINE for specific targets
-include agl-xen-${MACHINE}.inc
+include agl-sodev-${MACHINE}.inc
 
 BBMULTICONFIG ?= "agl-xen-domu"
 
-AGL_FEATURES:append = " agl-xen"
+AGL_FEATURES:append = " agl-sodev"
 
-# Hook to for reusable multiconfig vs default configuration.
+DISTROOVERRIDES:append = "${@":${BB_CURRENT_MC}" if "${BB_CURRENT_MC}" != "" else ":agl-xen-default"}"
+
+# Hook for reusable multiconfig vs default configuration.
 include ${@"mc-conf-multiconfig.inc" if "${BB_CURRENT_MC}" != "" else "mc-conf-default.inc"}
 
