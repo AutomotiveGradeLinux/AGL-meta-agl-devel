@@ -1,0 +1,32 @@
+From 235c242b3f118f2389a712a4901d105ce8321878 Mon Sep 17 00:00:00 2001
+From: Scott Murray <scott.murray@konsulko.com>
+Date: Mon, 31 Aug 2026 15:12:56 -0400
+Subject: [PATCH] drm/rcar-du: make MIPI DSI configuration more generic
+
+Remove endpoint constraint on MIPI DSI devicetree configuration.
+
+Adapted from:
+https://github.com/automotive-grade-linux/meta-rcar-demo/blob/sodev_sparrowhawk_stable/meta-xen-domd/recipes-kernel/linux/linux-renesas_%25.bbappend#L44
+
+Upstream-Status: Pending
+Signed-off-by: Scott Murray <scott.murray@konsulko.com>
+---
+ drivers/gpu/drm/renesas/rcar-du/rcar_mipi_dsi.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/renesas/rcar-du/rcar_mipi_dsi.c b/drivers/gpu/drm/renesas/rcar-du/rcar_mipi_dsi.c
+index f31295fc60e3..2668a6c44354 100644
+--- a/drivers/gpu/drm/renesas/rcar-du/rcar_mipi_dsi.c
++++ b/drivers/gpu/drm/renesas/rcar-du/rcar_mipi_dsi.c
+@@ -1175,7 +1175,7 @@ static int rcar_mipi_dsi_parse_dt(struct rcar_mipi_dsi *dsi)
+ {
+ 	int ret;
+ 
+-	ret = drm_of_get_data_lanes_count_ep(dsi->dev->of_node, 1, 0, 1, 4);
++	ret = drm_of_get_data_lanes_count_ep(dsi->dev->of_node, 1, -1, 1, 4);
+ 	if (ret < 0) {
+ 		dev_err(dsi->dev, "missing or invalid data-lanes property\n");
+ 		return ret;
+-- 
+2.55.0
+

@@ -1,0 +1,9 @@
+# short-description: Create disk image with a boot partition
+# long-description: Creates a partitioned image. Boot files
+# are located in the first vfat partition.  Intended to serve
+# as a base for adding a variable number of other partitions
+# via scripting.
+
+part /boot --source bootimg-partition --fstype=vfat --label boot --use-uuid --active --align 4 --size ${BOOTPART_SIZE}
+# Use GPT to keep partition numbers consistent
+bootloader --ptable gpt

@@ -1,0 +1,46 @@
+From e2e0d4428702aab4388ddb8463fbbadb908ed295 Mon Sep 17 00:00:00 2001
+From: Scott Murray <scott.murray@konsulko.com>
+Date: Mon, 9 Nov 2026 22:41:26 -0500
+Subject: [PATCH] Remove 3s start up delay
+
+Remove the 3s delay on start up.
+
+Upstream-Status: Inappropriate
+Signed-off-by: Scott Murray <scott.murray@konsulko.com>
+---
+ xen/common/warning.c | 12 +-----------
+ 1 file changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/xen/common/warning.c b/xen/common/warning.c
+index e6e1404baf..f965b1ac30 100644
+--- a/xen/common/warning.c
++++ b/xen/common/warning.c
+@@ -19,7 +19,7 @@ void __init warning_add(const char *warning)
+ 
+ void __init warning_print(void)
+ {
+-    unsigned int i, j;
++    unsigned int i;
+ 
+     if ( !nr_warnings )
+         return;
+@@ -33,16 +33,6 @@ void __init warning_print(void)
+         process_pending_softirqs();
+     }
+ 
+-    for ( i = 0; i < 3; i++ )
+-    {
+-        printk("%u... ", 3 - i);
+-        for ( j = 0; j < 100; j++ )
+-        {
+-            process_pending_softirqs();
+-            mdelay(10);
+-        }
+-    }
+-    printk("\n");
+ }
+ 
+ /*
+-- 
+2.56.0
+

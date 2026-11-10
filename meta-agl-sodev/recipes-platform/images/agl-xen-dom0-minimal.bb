@@ -1,8 +1,7 @@
 DESCRIPTION = "AGL minimal Xen dom0 image"
 LICENSE = "MIT"
 
-#require recipes-core/images/core-image-minimal.bb
-require recipes-platform/images/agl-image-minimal.bb
+require recipes-core/images/core-image-minimal.bb
 
 # Linux kernel option CONFIG_XEN_PCIDEV_BACKEND depends on X86
 XEN_PCIBACK_MODULE = ""
