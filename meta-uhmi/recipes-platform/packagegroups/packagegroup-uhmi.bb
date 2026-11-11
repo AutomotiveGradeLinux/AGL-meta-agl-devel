@@ -5,4 +5,8 @@ inherit packagegroup
 
 RDEPENDS:${PN} += " \
     unified-hmi \
+    remote-virtio-gpu \
+    virtio-loopback-driver \
+    mesa-virtio \
+    rvgpu-wlproxy \
 "

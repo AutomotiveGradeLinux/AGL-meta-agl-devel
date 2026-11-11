@@ -7,8 +7,7 @@ IMAGE_FEATURES += "ssh-server-openssh"
 
 # Add packages for Unified HMI demo platform here
 IMAGE_INSTALL += " \
-    packagegroup-rvgpu \
-    packagegroup-ddfw \
+    packagegroup-uhmi \
     uhmi-udev-conf \
     glmark2 \
 "

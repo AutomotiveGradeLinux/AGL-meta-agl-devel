@@ -45,13 +45,11 @@ $ cd $AGL_TOP/master
 $ source ./meta-agl/scripts/aglsetup.sh -m qemux86-64 -b qemux86-64 agl-demo agl-devel agl-uhmi
 ```
 
-To add RVGPU and DDFW to the build images, please add the packagegroup that enable RVGPU(packagegroup-rvgpu) and DDFW(packagegroup-ddfw) to the installation target using the following command.
+To add RVGPU and DDFW to the build images, please add the packagegroup-uhmi to the installation target using the following command.
 ```
-$ echo 'IMAGE_INSTALL:append = " packagegroup-rvgpu packagegroup-ddfw"' >> conf/local.conf
+$ echo 'IMAGE_INSTALL:append = " packagegroup-uhmi"' >> conf/local.conf
 ```
-packagegroup-ddfw installs `unified-hmi` (`uhmi-master-node`, `uhmi-worker-node`, `uhmi-comm`), its systemd services, and the default configuration files under `/etc/uhmi-framework/`.
-
-**Note**: RVGPU can be used independently without DDFW. However, DDFW uses RVGPU to render applications, so if you use DDFW, please add both packagegroups to the installation target.
+packagegroup-uhmi installs `unified-hmi` (`uhmi-master-node`, `uhmi-worker-node`, `uhmi-comm`), its systemd services, and the default configuration files under `/etc/uhmi-framework/`.
 
 After adding the feature, execute the command:
 ```
